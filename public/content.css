@@ -1,0 +1,76 @@
+.watch-together-overlay {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 15px;
+  border-radius: 8px;
+  z-index: 9999;
+  font-family: Arial, sans-serif;
+  max-width: 300px;
+}
+
+.watch-together-status {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.watch-together-status .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4CAF50;
+  margin-right: 8px;
+}
+
+.watch-together-participants {
+  margin: 10px 0;
+  font-size: 14px;
+}
+
+.watch-together-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.watch-together-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.watch-together-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.watch-together-notification {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  z-index: 9999;
+  font-family: Arial, sans-serif;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+} 

@@ -62,17 +62,28 @@ function WatchRoom() {
     const parsedUser = JSON.parse(storedUser)
     setUser(parsedUser)
 
-    // Join the room immediately after getting user info
-    socket.emit('join-room', {
-      roomId,
-      userName: parsedUser.displayName,
-      userId: parsedUser.uid,
-      userPhoto: parsedUser.photoURL
-    })
+    // Check if we're the room creator
+    const storedRoom = localStorage.getItem('watchPartyRoom')
+    const isRoomCreator = storedRoom && JSON.parse(storedRoom).roomId === roomId
+
+    if (!isRoomCreator) {
+      // Only try to join if we're not the creator
+      socket.emit('join-room', {
+        roomId,
+        userName: parsedUser.displayName,
+        userId: parsedUser.uid,
+        userPhoto: parsedUser.photoURL
+      })
+    } else {
+      // If we're the creator, just set the room info from localStorage
+      const roomInfo = JSON.parse(storedRoom)
+      setRoomInfo(roomInfo)
+      setIsLoading(false)
+    }
 
     socket.on('room-joined', (info) => {
       setRoomInfo(info)
-      setIsLoading(false) // Stop loading when room info is received
+      setIsLoading(false)
     })
 
     socket.on('room-not-found', () => {
@@ -253,10 +264,13 @@ function WatchRoom() {
     const firstScriptTag = document.getElementsByTagName('script')[0]
     firstScriptTag.parentNode.insertBefore(tag, firstScriptTag)
 
+    // Set up the onYouTubeIframeAPIReady callback
     window.onYouTubeIframeAPIReady = () => {
       console.log('YouTube API Ready')
       const newPlayer = new window.YT.Player('youtube-player', {
-        videoId,
+        height: '100%',
+        width: '100%',
+        videoId: videoId,
         playerVars: {
           autoplay: 0,
           controls: 1,
@@ -294,6 +308,7 @@ function WatchRoom() {
           },
           onError: (event) => {
             console.error('YouTube player error:', event.data)
+            setIsVideoLoaded(false)
             toast({
               title: 'Error loading video',
               description: 'There was an error loading the YouTube video. Please check the URL and try again.',
@@ -306,6 +321,16 @@ function WatchRoom() {
       })
     }
   }
+
+  // Add useEffect to initialize YouTube player when roomInfo changes
+  useEffect(() => {
+    if (roomInfo?.service === 'youtube' && roomInfo?.contentUrl) {
+      const videoId = extractYouTubeVideoId(roomInfo.contentUrl)
+      if (videoId) {
+        initializeYouTubePlayer(videoId)
+      }
+    }
+  }, [roomInfo])
 
   const handleVideoStateChange = (event) => {
     if (!roomId || !player || roomInfo?.hostId !== user?.uid) return

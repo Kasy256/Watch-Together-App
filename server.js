@@ -45,7 +45,9 @@ io.on('connection', (socket) => {
     console.log('Current rooms:', Array.from(rooms.keys()));
   });
 
-  socket.on('join-room', (roomId) => {
+  socket.on('join-room', (data) => {
+    // Extract roomId from the data object
+    const roomId = data.roomId || data;
     console.log(`User ${socket.id} attempting to join room: ${roomId}`);
     const room = rooms.get(roomId);
     

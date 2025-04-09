@@ -31,7 +31,7 @@ import { io } from 'socket.io-client'
 import SignIn from './SignIn'
 
 // Get the server URL from environment or use default
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'https://watch-together-app.onrender.com'
 const socket = io(SERVER_URL)
 
 function WatchRoom() {

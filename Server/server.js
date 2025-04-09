@@ -83,12 +83,27 @@ io.on('connection', (socket) => {
     const room = rooms.get(roomId)
     if (!room) return
 
+    // Add timestamp to state
+    state.timestamp = Date.now()
+
     // Update room's video state
     room.videoState = state
 
     // Broadcast to all users in the room except the sender
     socket.to(roomId).emit('video-state-update', { state })
   });
+
+  // Add periodic sync check
+  setInterval(() => {
+    rooms.forEach((room, roomId) => {
+      if (room.videoState.isPlaying) {
+        io.to(roomId).emit('sync-check', {
+          timestamp: Date.now(),
+          currentTime: room.videoState.currentTime
+        })
+      }
+    })
+  }, 5000); // Check every 5 seconds
 
   socket.on('chat-message', ({ roomId, message }) => {
     socket.to(roomId).emit('chat-message', {

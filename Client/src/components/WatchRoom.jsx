@@ -51,6 +51,8 @@ function WatchRoom() {
   const [isLoading, setIsLoading] = useState(true)
   const [pendingUsers, setPendingUsers] = useState([])
   const [acceptedUsers, setAcceptedUsers] = useState([])
+  const [lastSyncTime, setLastSyncTime] = useState(0)
+  const [networkLatency, setNetworkLatency] = useState(0)
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user')
@@ -211,6 +213,33 @@ function WatchRoom() {
       setMessages((prev) => [...prev, message])
     })
 
+    socket.on('sync-check', (data) => {
+      if (!player || roomInfo?.hostId === user?.uid) return
+
+      const currentTime = player.getCurrentTime()
+      const timeDiff = Math.abs(currentTime - data.currentTime)
+      const latency = Date.now() - data.timestamp
+
+      // Update network latency estimate
+      setNetworkLatency(prev => (prev + latency) / 2)
+
+      // If drift is more than 0.5 seconds, resync
+      if (timeDiff > 0.5) {
+        const adjustedTime = data.currentTime + (latency / 1000)
+        player.seekTo(adjustedTime, true)
+      }
+    })
+
+    // Add periodic latency check
+    const latencyCheck = setInterval(() => {
+      if (roomInfo?.hostId === user?.uid && player) {
+        socket.emit('latency-check', {
+          roomId,
+          timestamp: Date.now()
+        })
+      }
+    }, 10000)
+
     return () => {
       socket.off('room-joined')
       socket.off('room-not-found')
@@ -230,8 +259,9 @@ function WatchRoom() {
       if (script) {
         script.remove()
       }
+      clearInterval(latencyCheck)
     }
-  }, [roomId, navigate, toast])
+  }, [roomId, navigate, toast, player, roomInfo, user])
 
   const initializeYouTubePlayer = (videoId) => {
     console.log('Initializing YouTube player with video ID:', videoId)
@@ -294,7 +324,8 @@ function WatchRoom() {
                   currentTime: event.target.getCurrentTime(),
                   isPlaying: event.target.getPlayerState() === window.YT.PlayerState.PLAYING,
                   playbackRate: event.target.getPlaybackRate(),
-                  videoId
+                  videoId,
+                  timestamp: Date.now()
                 }
                 socket.emit('video-state', { roomId, state })
               }, 1000)
@@ -336,13 +367,20 @@ function WatchRoom() {
     if (!roomId || !player || roomInfo?.hostId !== user?.uid) return
     
     try {
+      const currentTime = player.getCurrentTime()
       const state = {
-        currentTime: player.getCurrentTime(),
+        currentTime,
         isPlaying: event.data === window.YT.PlayerState.PLAYING,
         playbackRate: player.getPlaybackRate(),
-        videoId: extractYouTubeVideoId(roomInfo.contentUrl)
+        videoId: extractYouTubeVideoId(roomInfo.contentUrl),
+        timestamp: Date.now()
       }
-      socket.emit('video-state', { roomId, state })
+
+      // Only send state update if enough time has passed since last sync
+      if (Date.now() - lastSyncTime > 100) {
+        socket.emit('video-state', { roomId, state })
+        setLastSyncTime(Date.now())
+      }
     } catch (error) {
       console.error('Error handling video state change:', error)
     }

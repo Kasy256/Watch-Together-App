@@ -93,7 +93,7 @@ io.on('connection', (socket) => {
     socket.to(roomId).emit('video-state-update', { state })
   });
 
-  // Add periodic sync check
+  // Add more frequent sync check
   setInterval(() => {
     rooms.forEach((room, roomId) => {
       if (room.videoState.isPlaying) {
@@ -103,7 +103,7 @@ io.on('connection', (socket) => {
         })
       }
     })
-  }, 5000); // Check every 5 seconds
+  }, 1000); // Check every 1 second instead of 5
 
   socket.on('chat-message', ({ roomId, message }) => {
     socket.to(roomId).emit('chat-message', {

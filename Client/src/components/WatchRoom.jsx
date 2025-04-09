@@ -345,59 +345,70 @@ function WatchRoom() {
     // Set up the onYouTubeIframeAPIReady callback
     window.onYouTubeIframeAPIReady = () => {
       console.log('YouTube API Ready')
-      const newPlayer = new window.YT.Player('youtube-player', {
-        height: '100%',
-        width: '100%',
-        videoId: videoId,
-        playerVars: {
-          autoplay: 0,
-          controls: 1,
-          enablejsapi: 1,
-          origin: window.location.origin,
-          modestbranding: 1,
-          rel: 0,
-          showinfo: 0,
-          disablekb: roomInfo?.hostId !== user?.uid,
-        },
-        events: {
-          onReady: (event) => {
-            console.log('YouTube player ready')
-            setPlayer(event.target)
-            setIsVideoLoaded(true)
-            
-            // If we're the host, send initial state after player is ready
-            if (roomInfo?.hostId === user?.uid) {
-              setTimeout(() => {
-                const state = {
-                  currentTime: event.target.getCurrentTime(),
-                  isPlaying: event.target.getPlayerState() === window.YT.PlayerState.PLAYING,
-                  playbackRate: event.target.getPlaybackRate(),
-                  videoId,
-                  timestamp: Date.now()
-                }
-                socket.emit('video-state', { roomId, state })
-              }, 1000)
-            }
+      try {
+        const newPlayer = new window.YT.Player('youtube-player', {
+          height: '100%',
+          width: '100%',
+          videoId: videoId,
+          playerVars: {
+            autoplay: 1,
+            controls: 1,
+            enablejsapi: 1,
+            origin: window.location.origin,
+            modestbranding: 1,
+            rel: 0,
+            showinfo: 0,
+            disablekb: roomInfo?.hostId !== user?.uid,
           },
-          onStateChange: (event) => {
-            console.log('YouTube player state changed:', event.data)
-            if (roomInfo?.hostId === user?.uid) {
-              handleVideoStateChange(event)
-            }
+          events: {
+            onReady: (event) => {
+              console.log('YouTube player ready')
+              setPlayer(event.target)
+              setIsVideoLoaded(true)
+              
+              // If we're the host, send initial state after player is ready
+              if (roomInfo?.hostId === user?.uid) {
+                setTimeout(() => {
+                  const state = {
+                    currentTime: event.target.getCurrentTime(),
+                    isPlaying: event.target.getPlayerState() === window.YT.PlayerState.PLAYING,
+                    playbackRate: event.target.getPlaybackRate(),
+                    videoId,
+                    timestamp: Date.now()
+                  }
+                  socket.emit('video-state', { roomId, state })
+                }, 1000)
+              }
+            },
+            onStateChange: (event) => {
+              console.log('YouTube player state changed:', event.data)
+              if (roomInfo?.hostId === user?.uid) {
+                handleVideoStateChange(event)
+              }
+            },
+            onError: (event) => {
+              console.error('YouTube player error:', event.data)
+              setIsVideoLoaded(false)
+              toast({
+                title: 'Error loading video',
+                description: 'There was an error loading the YouTube video. Please check the URL and try again.',
+                status: 'error',
+                duration: 5000,
+                isClosable: true,
+              })
+            },
           },
-          onError: (event) => {
-            console.error('YouTube player error:', event.data)
-            setIsVideoLoaded(false)
-            toast({
-              title: 'Error loading video',
-              description: 'There was an error loading the YouTube video. Please check the URL and try again.',
-              status: 'error',
-              duration: 5000,
-              isClosable: true,
-            })
-          },
-        },
-      })
+        })
+      } catch (error) {
+        console.error('Error creating YouTube player:', error)
+        toast({
+          title: 'Error',
+          description: 'Failed to initialize the video player. Please try refreshing the page.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        })
+      }
     }
   }
 
@@ -622,10 +633,8 @@ function WatchRoom() {
                         left: 0,
                         width: '100%',
                         height: '100%',
-                        backgroundColor: 'black',
+                        backgroundColor: '#000',
                         pointerEvents: roomInfo?.hostId === user?.uid ? 'auto' : 'none',
-                        opacity: roomInfo?.hostId === user?.uid ? 1 : 0.8,
-                        zIndex: roomInfo?.hostId === user?.uid ? 2 : 1
                       }}
                     />
                   ) : (

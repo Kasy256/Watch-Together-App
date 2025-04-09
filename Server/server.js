@@ -1,22 +1,43 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import cors from 'cors';
 
 const app = express();
 const httpServer = createServer(app);
 
+// Enable CORS for all routes
+app.use(cors());
+
 const io = new Server(httpServer, {
   cors: {
-    origin: "https://watch-together-2025.web.app",
-    methods: ["GET", "POST"]
-  }
+    origin: [
+      "https://watch-together-2025.web.app", // Firebase hosting
+      "http://localhost:5173", // Local development
+      "http://localhost:3000"  // Alternative local port
+    ],
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['websocket', 'polling']
 });
 
+// Add health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
 
 const rooms = new Map();
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+
+  // Handle reconnection
+  socket.on('reconnect', () => {
+    console.log('User reconnected:', socket.id);
+  });
 
   socket.on('create-room', ({ roomId, roomName, hostName, service, contentUrl, hostId, hostPhoto }) => {
     console.log(`Creating room: ${roomId} (${roomName}) by ${hostName}`);
@@ -139,15 +160,8 @@ const startServer = async () => {
         console.log(`Server running on port ${PORT}`);
         resolve();
       }).on('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-          console.log(`Port ${PORT} is busy, trying ${PORT + 1}`);
-          httpServer.listen(PORT + 1, () => {
-            console.log(`Server running on port ${PORT + 1}`);
-            resolve();
-          });
-        } else {
-          reject(err);
-        }
+        console.error('Server error:', err);
+        reject(err);
       });
     });
   } catch (error) {

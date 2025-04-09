@@ -31,8 +31,15 @@ import { io } from 'socket.io-client'
 import SignIn from './SignIn'
 
 // Get the server URL from environment or use default
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
-const socket = io(SERVER_URL)
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'https://watch-together-backend.onrender.com'
+const socket = io(SERVER_URL, {
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  timeout: 20000
+})
 
 function WatchRoom() {
   const { roomId } = useParams()
@@ -241,6 +248,48 @@ function WatchRoom() {
       }
     }, 2000) // Check every 2 seconds
 
+    // Handle socket connection events
+    socket.on('connect', () => {
+      console.log('Connected to server')
+    })
+
+    socket.on('connect_error', (error) => {
+      console.error('Connection error:', error)
+      toast({
+        title: 'Connection Error',
+        description: 'Unable to connect to the server. Trying to reconnect...',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    })
+
+    socket.on('reconnect', (attemptNumber) => {
+      console.log('Reconnected after', attemptNumber, 'attempts')
+      toast({
+        title: 'Reconnected',
+        description: 'Successfully reconnected to the server',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    })
+
+    socket.on('reconnect_error', (error) => {
+      console.error('Reconnection error:', error)
+    })
+
+    socket.on('reconnect_failed', () => {
+      console.error('Failed to reconnect')
+      toast({
+        title: 'Connection Lost',
+        description: 'Unable to reconnect to the server. Please refresh the page.',
+        status: 'error',
+        duration: null,
+        isClosable: true,
+      })
+    })
+
     return () => {
       socket.off('room-joined')
       socket.off('room-not-found')
@@ -252,6 +301,11 @@ function WatchRoom() {
       socket.off('user-left')
       socket.off('video-state-update')
       socket.off('sync-check')
+      socket.off('connect')
+      socket.off('connect_error')
+      socket.off('reconnect')
+      socket.off('reconnect_error')
+      socket.off('reconnect_failed')
       if (player) {
         player.destroy()
       }

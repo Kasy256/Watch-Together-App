@@ -31,7 +31,7 @@ import { io } from 'socket.io-client'
 import SignIn from './SignIn'
 
 // Get the server URL from environment or use default
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'https://watch-together-app.onrender.com'
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 const socket = io(SERVER_URL)
 
 function WatchRoom() {
@@ -51,6 +51,9 @@ function WatchRoom() {
   const [isLoading, setIsLoading] = useState(true)
   const [pendingUsers, setPendingUsers] = useState([])
   const [acceptedUsers, setAcceptedUsers] = useState([])
+  const [lastSyncTime, setLastSyncTime] = useState(0)
+  const [networkLatency, setNetworkLatency] = useState(0)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user')
@@ -178,18 +181,18 @@ function WatchRoom() {
     })
 
     socket.on('video-state-update', (data) => {
-      console.log('Received video state update:', data)
-      if (!data || !data.state || !player) return
+      if (!data || !data.state || !player || roomInfo?.hostId === user?.uid) return
 
       try {
-        const { currentTime, isPlaying, playbackRate } = data.state
-        const currentPlayerTime = player.getCurrentTime()
-        const timeDiff = Math.abs(currentPlayerTime - currentTime)
+        const { currentTime, isPlaying, playbackRate, timestamp } = data.state
+        const latency = Date.now() - timestamp
+        const adjustedTime = currentTime + (latency / 1000)
 
-        // Only update if the time difference is significant (more than 1 second)
-        if (timeDiff > 1) {
-          player.seekTo(currentTime)
-        }
+        // Update network latency estimate
+        setNetworkLatency(prev => (prev + latency) / 2)
+
+        // Sync video time
+        syncVideo(adjustedTime)
 
         // Update playback state
         if (isPlaying && player.getPlayerState() !== window.YT.PlayerState.PLAYING) {
@@ -207,8 +210,77 @@ function WatchRoom() {
       }
     })
 
-    socket.on('chat-message', (message) => {
-      setMessages((prev) => [...prev, message])
+    socket.on('sync-check', (data) => {
+      if (!player || roomInfo?.hostId === user?.uid) return
+
+      const currentTime = player.getCurrentTime()
+      const timeDiff = Math.abs(currentTime - data.currentTime)
+      const latency = Date.now() - data.timestamp
+
+      // Update network latency estimate
+      setNetworkLatency(prev => (prev + latency) / 2)
+
+      // If drift is more than 0.3 seconds, force resync
+      if (timeDiff > 0.3) {
+        const adjustedTime = data.currentTime + (latency / 1000)
+        syncVideo(adjustedTime, true)
+      }
+    })
+
+    // Add periodic sync check for host
+    const syncInterval = setInterval(() => {
+      if (roomInfo?.hostId === user?.uid && player) {
+        const state = {
+          currentTime: player.getCurrentTime(),
+          isPlaying: player.getPlayerState() === window.YT.PlayerState.PLAYING,
+          playbackRate: player.getPlaybackRate(),
+          videoId: extractYouTubeVideoId(roomInfo.contentUrl),
+          timestamp: Date.now()
+        }
+        socket.emit('video-state', { roomId, state })
+      }
+    }, 2000) // Check every 2 seconds
+
+    // Handle socket connection events
+    socket.on('connect', () => {
+      console.log('Connected to server')
+    })
+
+    socket.on('connect_error', (error) => {
+      console.error('Connection error:', error)
+      toast({
+        title: 'Connection Error',
+        description: 'Unable to connect to the server. Trying to reconnect...',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    })
+
+    socket.on('reconnect', (attemptNumber) => {
+      console.log('Reconnected after', attemptNumber, 'attempts')
+      toast({
+        title: 'Reconnected',
+        description: 'Successfully reconnected to the server',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    })
+
+    socket.on('reconnect_error', (error) => {
+      console.error('Reconnection error:', error)
+    })
+
+    socket.on('reconnect_failed', () => {
+      console.error('Failed to reconnect')
+      toast({
+        title: 'Connection Lost',
+        description: 'Unable to reconnect to the server. Please refresh the page.',
+        status: 'error',
+        duration: null,
+        isClosable: true,
+      })
     })
 
     return () => {
@@ -221,7 +293,12 @@ function WatchRoom() {
       socket.off('user-joined')
       socket.off('user-left')
       socket.off('video-state-update')
-      socket.off('chat-message')
+      socket.off('sync-check')
+      socket.off('connect')
+      socket.off('connect_error')
+      socket.off('reconnect')
+      socket.off('reconnect_error')
+      socket.off('reconnect_failed')
       if (player) {
         player.destroy()
       }
@@ -230,8 +307,9 @@ function WatchRoom() {
       if (script) {
         script.remove()
       }
+      clearInterval(syncInterval)
     }
-  }, [roomId, navigate, toast])
+  }, [roomId, navigate, toast, player, roomInfo, user])
 
   const initializeYouTubePlayer = (videoId) => {
     console.log('Initializing YouTube player with video ID:', videoId)
@@ -294,7 +372,8 @@ function WatchRoom() {
                   currentTime: event.target.getCurrentTime(),
                   isPlaying: event.target.getPlayerState() === window.YT.PlayerState.PLAYING,
                   playbackRate: event.target.getPlaybackRate(),
-                  videoId
+                  videoId,
+                  timestamp: Date.now()
                 }
                 socket.emit('video-state', { roomId, state })
               }, 1000)
@@ -336,23 +415,39 @@ function WatchRoom() {
     if (!roomId || !player || roomInfo?.hostId !== user?.uid) return
     
     try {
+      const currentTime = player.getCurrentTime()
       const state = {
-        currentTime: player.getCurrentTime(),
+        currentTime,
         isPlaying: event.data === window.YT.PlayerState.PLAYING,
         playbackRate: player.getPlaybackRate(),
-        videoId: extractYouTubeVideoId(roomInfo.contentUrl)
+        videoId: extractYouTubeVideoId(roomInfo.contentUrl),
+        timestamp: Date.now()
       }
-      socket.emit('video-state', { roomId, state })
+
+      // Send state update immediately for play/pause events
+      if (event.data === window.YT.PlayerState.PLAYING || 
+          event.data === window.YT.PlayerState.PAUSED) {
+        socket.emit('video-state', { roomId, state })
+        setLastSyncTime(Date.now())
+      }
     } catch (error) {
       console.error('Error handling video state change:', error)
     }
   }
 
   const sendMessage = () => {
-    if (!newMessage.trim() || !roomId) return
+    if (!newMessage.trim() || !roomId || !user) return
 
-    socket.emit('chat-message', { roomId, message: newMessage })
-    setMessages(prev => [...prev, { userId: socket.id, message: newMessage }])
+    const messageData = {
+      userId: user.uid,
+      userName: user.displayName,
+      userPhoto: user.photoURL,
+      message: newMessage.trim(),
+      timestamp: Date.now()
+    }
+
+    socket.emit('chat-message', { roomId, message: messageData })
+    setMessages(prev => [...prev, messageData])
     setNewMessage('')
   }
 
@@ -419,6 +514,26 @@ function WatchRoom() {
   const handleRejectUser = (userData) => {
     socket.emit('reject-join-request', { roomId, userData })
     setPendingUsers(prev => prev.filter(u => u.userId !== userData.userId))
+  }
+
+  const syncVideo = (targetTime, force = false) => {
+    if (!player || isSyncing) return
+
+    try {
+      setIsSyncing(true)
+      const currentTime = player.getCurrentTime()
+      const timeDiff = Math.abs(currentTime - targetTime)
+
+      // Only sync if difference is significant or forced
+      if (timeDiff > 0.3 || force) {
+        player.seekTo(targetTime, true)
+        console.log(`Syncing video: ${currentTime} -> ${targetTime}`)
+      }
+    } catch (error) {
+      console.error('Error syncing video:', error)
+    } finally {
+      setIsSyncing(false)
+    }
   }
 
   if (isLoading && user) {
@@ -595,7 +710,7 @@ function WatchRoom() {
                     ref={chatContainerRef}
                     flex="1"
                     overflowY="auto"
-                    w="full"
+                    p={4}
                     css={{
                       '&::-webkit-scrollbar': {
                         width: '4px',
@@ -604,28 +719,34 @@ function WatchRoom() {
                         width: '6px',
                       },
                       '&::-webkit-scrollbar-thumb': {
-                        background: 'gray.500',
+                        background: 'gray.300',
                         borderRadius: '24px',
                       },
                     }}
                   >
-                    <VStack spacing={4} align="stretch">
-                      {messages.map((msg, index) => (
-                        <Box
-                          key={index}
-                          bg={msg.userId === socket.id ? 'brand.500' : 'gray.700'}
-                          p={3}
-                          borderRadius="lg"
-                          alignSelf={msg.userId === socket.id ? 'flex-end' : 'flex-start'}
-                          maxW="80%"
-                        >
-                          <Text fontSize="xs" color="gray.400" mb={1}>
-                            {msg.userId === socket.id ? 'You' : `User ${msg.userId.slice(0, 4)}`}
+                    {messages.map((msg, index) => (
+                      <Box
+                        key={index}
+                        mb={4}
+                        display="flex"
+                        alignItems="flex-start"
+                        gap={3}
+                      >
+                        <Avatar
+                          size="sm"
+                          name={msg.userName}
+                          src={msg.userPhoto}
+                        />
+                        <Box>
+                          <Text fontSize="sm" fontWeight="bold" color="gray.700">
+                            {msg.userName}
                           </Text>
-                          <Text color="white">{msg.message}</Text>
+                          <Text fontSize="md" color="gray.800">
+                            {msg.message}
+                          </Text>
                         </Box>
-                      ))}
-                    </VStack>
+                      </Box>
+                    ))}
                   </Box>
 
                   <HStack w="full">

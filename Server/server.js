@@ -4,12 +4,14 @@ import { Server } from 'socket.io';
 
 const app = express();
 const httpServer = createServer(app);
+
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: "https://watch-together-2025.web.app",
     methods: ["GET", "POST"]
   }
 });
+
 
 const rooms = new Map();
 

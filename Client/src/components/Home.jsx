@@ -145,19 +145,19 @@ function Home() {
   return (
     <Box minH="100vh" bg="gray.50">
       {/* Header */}
-      <Box bg="white" py={4} shadow="sm">
+      <Box bg="gray.900" py={4} shadow="sm">
         <Container maxW="container.lg">
           <Flex align="center">
             <HStack>
-              <Box as="span" fontSize="xl" fontWeight="bold">
+              <Box as="span" fontSize="xl" fontWeight="bold" color={"white"}>
                 📺 Watch Party
               </Box>
             </HStack>
             <Spacer />
             {user ? (
               <HStack spacing={4}>
-                <Text color="gray.600">Welcome, {user.displayName}</Text>
-                <Button onClick={handleSignOut} variant="ghost" colorScheme="gray">
+                <Text color="white">Welcome, {user.displayName}</Text>
+                <Button onClick={handleSignOut} variant="ghost" colorScheme="red">
                   Sign Out
                 </Button>
               </HStack>
@@ -171,67 +171,79 @@ function Home() {
       </Box>
 
       {/* Main Content */}
-      <Container maxW="container.xl" py={20}>
-        <Box display="flex" alignItems="center" gap={20}>
-          <Box flex={1}>
-            <Heading
-              as="h1"
-              size="2xl"
-              lineHeight="1.2"
-              mb={6}
-            >
-              Watch Together,<br />
-              Anywhere
-            </Heading>
-            <Text fontSize="xl" color="gray.600" mb={8}>
-              Synchronize Netflix, Amazon Prime, Disney+ and more with friends
-              and family. Chat, react, and enjoy movies together, even when
-              you're apart.
-            </Text>
-            <HStack spacing={4}>
-              <Button onClick={() => handleNavigation('/create')} size="lg" bg="gray.900" color="white" _hover={{ bg: 'gray.600' }}>
-                Create a Room
-              </Button>
-              <Input
-                placeholder="12345"
-                value={roomId}
-                onChange={(e) => setRoomId(e.target.value)}
-                maxW="130px"
-                textAlign="center"
-                size="lg"
-              />
-              <Button variant="outline" onClick={joinRoom} size="lg" bg="gray.600" color="white" _hover={{ bg: 'gray.900' }}>
-                Join Room
-              </Button>
+        <Container maxW="container.xl" py={20}>
+          <Box display="flex" alignItems="center" gap={20}>
+            <Box flex={1}>
+          <Heading
+            as="h1"
+            size="2xl"
+            lineHeight="1.2"
+            mb={6}
+          >
+            Watch Together,<br />
+            Anywhere
+          </Heading>
+          <Text fontSize="xl" color="gray.600" mb={8}>
+            Synchronize Netflix, Amazon Prime, Disney+ and more with friends
+            and family. Chat, react, and enjoy movies together, even when
+            you're apart.
+          </Text>
+          <HStack spacing={4}>
+            <Button onClick={() => handleNavigation('/create')} size="lg" bg="gray.900" color="white" _hover={{ bg: 'gray.600' }}>
+              Create a Room
+            </Button>
+            <Input
+              placeholder="12345"
+              value={roomId}
+              onChange={(e) => setRoomId(e.target.value)}
+              maxW="130px"
+              textAlign="center"
+              size="lg"
+              borderColor="gray.500"
+            />
+            <Button variant="outline" onClick={joinRoom} size="lg" bg="gray.600" color="white" _hover={{ bg: 'gray.900' }}>
+              Join Room
+            </Button>
+          </HStack>
+          <Box mt={8}>
+            <Text color="gray.600" mb={3}>Works with</Text>
+            <HStack spacing={3}>
+              <StreamingService name="Netflix" />
+              <StreamingService name="Prime" />
+              <StreamingService name="Disney" />
+              <StreamingService name="Hulu" />
+              <StreamingService name="HBOMax" />
+              <StreamingService name="YouTube" />
             </HStack>
-            <Box mt={8}>
-              <Text color="gray.600" mb={3}>Works with</Text>
-              <HStack spacing={3}>
-                <StreamingService name="Netflix" />
-                <StreamingService name="Prime" />
-                <StreamingService name="Disney" />
-                <StreamingService name="Hulu" />
-                <StreamingService name="HBOMax" />
-                <StreamingService name="YouTube" />
-              </HStack>
+          </Box>
+            </Box>
+            <Box flex={1}>
+          <Box
+             position="relative"
+             borderRadius="xl"
+             overflow="hidden"
+             height="400px"
+             display="flex"
+             alignItems="center"
+             justifyContent="center"
+          >
+            <Image
+                src="/movies.jpg"
+                alt="Movie Background"
+                objectFit="cover"
+                width="100%"
+                height="100%"
+                position="absolute"
+                top={0}
+                left={0}
+                zIndex={0}
+              />
+          </Box>
             </Box>
           </Box>
-          <Box flex={1}>
-            <Box
-              bg="gray.100"
-              borderRadius="xl"
-              h="400px"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Text color="gray.500">Preview Image</Text>
-            </Box>
-          </Box>
-        </Box>
-      </Container>
+        </Container>
 
-      {/* SignIn Modal */}
+        {/* SignIn Modal */}
       <SignIn isOpen={isOpen} onClose={onClose} setUser={setUser} />
     </Box>
   )

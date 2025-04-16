@@ -13,7 +13,7 @@ const io = new Server(httpServer, {
   cors: {
     origin: [
       "https://watch-together-2025.web.app", // Firebase hosting
-      "http://localhost:5173", // Local development
+      "http://localhost:5174", // Local development
       "http://localhost:3000"  // Alternative local port
     ],
     methods: ["GET", "POST"],
